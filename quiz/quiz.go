@@ -31,51 +31,61 @@ func main() {
 	filename := flag.String("filename", "./problems.csv", "filename to use if passed, ./problems.csv")
 	flag.Parse()
 
-	problems := readProblems(*filename)
+	csvfile, err := openFile(*filename)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer func() {
+		err := csvfile.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	problems, err := readProblems(csvfile)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	result := askQuestions(problems, out, in)
 
 	result.show(out)
 }
 
-func (p problem) String() string {
-	return fmt.Sprintf("%s,%s", p.question, p.answer)
-}
-
 func toProblem(row []string) problem {
 	return problem{
-		row[0],
-		row[1],
+		strings.TrimSpace(row[0]),
+		strings.TrimSpace(row[1]),
 	}
 }
 
-func closeFile(f *os.File) {
-	err := f.Close()
+func openFile(filename string) (csvfile io.ReadCloser, err error) {
+	csvfile, err = os.Open(filename)
+
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error closing file: %v\n", err)
-		os.Exit(1)
+		err = fmt.Errorf("couldn't open the csv file %v", err)
+		return
 	}
+
+	return
 }
 
-func readProblems(file string) []problem {
-	var problems []problem
-
-	csvfile, err := os.Open(file)
-
-	defer closeFile(csvfile)
-
-	if err != nil {
-		log.Fatalln("Couldn't open the csv file", err)
-	}
+func readProblems(csvfile io.Reader) (problems []problem, err error) {
 
 	reader := csv.NewReader(csvfile)
 
-	records, err := reader.ReadAll()
+	records, _ := reader.ReadAll()
 
-	for _, record := range records {
-		problems = append(problems, toProblem(record))
+	problems = make([]problem, len(records))
+
+	for index, record := range records {
+		problems[index] = toProblem(record)
 	}
-	return problems
+
+	return
 }
 
 func askQuestions(problems []problem, out io.Writer, in io.Reader) results {
